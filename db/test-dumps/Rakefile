@@ -1,0 +1,3 @@
+task :console do
+  sh 'irb -Ilib -rapp_config'
+end

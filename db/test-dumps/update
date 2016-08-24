@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+
+# Script is used to dump all production databases to perform testing
+# in an environment as much closer to production as possible.
+
+require File.expand_path('../lib/config', __FILE__)
+
+#### Check remote SSH connections
+
+ConsoleLogger.info "Checking SSH connections..."
+DATABASES.map(&:hostname).uniq.sort.each do |host|
+  cmd = CONFIG.ssh_command.gsub('%user%', 'root').gsub('%host%', host).gsub('%command%', "true")
+
+  next unless ConsoleLogger.progress "root@#{host}..." do
+    DatabaseDump.stdout.append(cmd)
+  end
+
+  # Do not exit, it could probably "added host to know hosts".
+  # Try it again, now with host being known
+  next unless ConsoleLogger.progress "root@#{host}..." do
+    DatabaseDump.stdout.append(cmd)
+  end
+
+  # Now it's a real error. Fuck
+  exit(1)
+end
+ConsoleLogger.new_line
+
+#### Dump databases
+
+ConsoleLogger.info "Generating dumps..."
+
+DATABASES.each do |db|
+  ConsoleLogger.progress "#{db.description}#{' ' * (CONFIG.database_description_width - db.description.size)} => #{db.name}" do
+    # Prepare dump command
+    options = ['--no-data']
+    options.concat db.ignore.map { |t| "--ignore-table=#{db.database}.#{t}" }
+    options << '--user='     + db.username
+    options << '--password=' + db.password if db.password
+    options << '--host='     + db.connect_hostname
+    options << '--port='     + db.port.to_s
+    options << db.database
+    options.concat db.tables
+    cmd = CONFIG.dump_command.gsub('%dump_options%', options.join(' '))
+    cmd = CONFIG.ssh_command.gsub('%user%', 'root').gsub('%host%', db.hostname).gsub('%command%', cmd)
+
+    DatabaseDump.for(db.name).append(cmd)
+  end
+end
+ConsoleLogger.new_line
+
+#### Dump migrations
+
+ConsoleLogger.info 'Dumping migrations...'
+DATABASES.each do |db|
+  next unless db.migrations?
+
+  table_name = 'schema_migrations'
+  ConsoleLogger.progress "#{table_name}#{' ' * (CONFIG.database_description_width - table_name.size)} => #{db.name}" do
+    options = "--no-create-info #{db.database} #{table_name}"
+    cmd = CONFIG.dump_command.gsub('%dump_options%', options)
+    cmd = CONFIG.ssh_command.gsub('%user%', 'root').gsub('%host%', db.hostname).gsub('%command%', cmd)
+
+    DatabaseDump.for(db.name).append(cmd)
+  end
+end
+
+# Close all dump files opened
+DatabaseDump.close
+
+ConsoleLogger.new_line
+ConsoleLogger.info 'Done!'

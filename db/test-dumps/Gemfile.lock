@@ -1,0 +1,13 @@
+GEM
+  remote: http://gems.lo/scribd/
+  remote: https://rubygems.org/
+  specs:
+    mysql2 (0.3.16)
+    rake (10.0.4)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  mysql2
+  rake

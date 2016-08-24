@@ -1,0 +1,5 @@
+source 'http://gems.lo/scribd'
+source 'https://rubygems.org'
+
+gem 'mysql2'
+gem 'rake'

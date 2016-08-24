@@ -1,0 +1,180 @@
+databases:
+- name: master
+  hostname: core-db.lo
+  database: collegelist_production
+  migrations: true
+  ignore:
+    - author_category_popularities_old
+    - content_pool_document_restrictions_old
+    - content_pool_user_memberships_old
+    - document_audits_old
+    - document_boosts_old
+    - user_boosts_old
+
+- name: scribd_logs
+  hostname: log-db02.lo
+  database: scribd_logs
+
+- name: scribd_hackday
+  hostname: log-db02.lo
+  database: scribd_hackday
+
+- name: queue_db
+  hostname: queue-db.lo
+  database: queues
+  ignore:
+    - document_indexer_queue_failures
+    - document_indexer_temp_queue
+    - book_indexer_queue_test
+
+- name: metadata
+  hostname: meta-db.lo
+  database: collegelist_production
+  ignore:
+    - author_audits_old
+    - author_duplicate_audits_old
+    - book_reading_speeds_old
+    - boosted_users_old
+    - category_top_attributes_old
+    - library_thing_workcodes_old
+    - magic_collection_audits_old
+    - provisional_library_thing_tags_old
+    - reading_states_old
+    - user_reading_speeds_old
+    - workcode_publication_dates_old
+
+- name: jumpfrog
+  hostname: meta-db.lo
+  database: jumpfrog
+
+- name: spam
+  hostname: meta-db.lo
+  database: spam
+
+- name: bounces_handler
+  hostname: core-db.lo
+  database: bounces_production
+  tables:
+    - mailing_blacklist
+    - mailing_domains
+
+- name: texts_backup
+  hostname: texts-db01.lo
+  database: texts_backup
+
+- name: analytics_metrics
+  hostname: metrics-db.lo
+  database: analytics_log_production
+  migrations: true
+
+- name: analytics_logs
+  hostname: log-db02.lo
+  database: analytics_logs
+  tables:
+    - event_log_template
+
+- name: ops
+  hostname: core-db.lo
+  database: scribd_admin_production
+  migrations: true
+
+- name: slowlogs
+  hostname: meta-db.lo
+  database: slowlogs
+
+- name: warehouse
+  hostname: meta-db.lo
+  database: warehouse
+  migrations: true
+
+- name: single_period_stats
+  hostname: browse-db02.lo
+  database: single_period_stats
+
+- name: collegelist_production_meta
+  hostname: browse-db02.lo
+  database: collegelist_production_meta
+
+- name: export
+  hostname: export-db01.lo
+  database: scribd_export
+  ignore:
+    - top_word_documents_by_topic_old
+
+projects:
+  scribd:
+    databases:
+      - master
+      - metadata
+      - queue_db
+      - scribd_logs
+      - analytics_metrics
+      - bounces_handler
+      - jumpfrog
+      - spam
+      - texts_backup
+      - export
+
+  analytics:
+    databases:
+      - analytics_metrics
+      - analytics_logs
+      - master
+
+  ops:
+    databases:
+      - ops
+      - master
+      - queue_db
+      - scribd_logs
+      - jumpfrog
+      - slowlogs
+
+  spam-admin:
+    databases:
+      - master
+      - metadata
+      - spam
+      - analytics_metrics
+      - scribd_logs
+
+  besar:
+    databases:
+      - master
+      - queue_db
+      - metadata
+      - warehouse
+      - export
+
+  devbox:
+    databases:
+      - analytics_metrics
+      - bounces_handler
+      - collegelist_production_meta
+      - jumpfrog
+      - master
+      - metadata
+      - queue_db
+      - scribd_logs
+      - single_period_stats
+      - spam
+      - texts_backup
+      - warehouse
+      - export
+      - ops
+      - slowlogs
+
+  image_server:
+    databases:
+      - master
+      - metadata
+
+  imageserver:
+    databases:
+      - master
+      - metadata
+
+  bounces:
+    databases:
+      - bounces_handler
+      - metadata

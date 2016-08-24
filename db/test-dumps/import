@@ -1,0 +1,117 @@
+#!/usr/bin/env ruby
+
+# Script is used to create a test database from test dumps. No need
+# to parallelize dumps import, because MySQL blocks the whole InnoDB
+# space and imports performed one by one (at least it looks like after
+# some testing).
+
+require File.expand_path('../lib/config', __FILE__)
+
+# SOCIAL_SHARDS_INFO      = "INSERT INTO event_shards_info SET id=1, db_host='127.0.0.1', db_name='#{DB_NAME_FORMAT % ['social_shard01', '%s']}', enabled = 1, open = 1"
+# FOLLOWSHIPS_SHARDS_INFO = [
+#   "INSERT INTO followships_shards_info SET id=1, db_host='127.0.0.1', db_name_prefix='#{DB_NAME_FORMAT % ['followships_shard01', '%s']}'",
+#   "INSERT INTO followships_groups_info SET id=1, shard_id=1, enabled = 1, open = 1"
+# ]
+
+#### Helper methods
+
+# mysql command, config combined
+def mysql
+  "#{CONFIG.mysql_exe} #{CONFIG.mysql_options}"
+end
+
+def mysqladmin
+  "#{CONFIG.mysqladmin_exe} #{CONFIG.mysql_options}"
+end
+
+def create_database(database, suffix)
+  orig_db_name = database.name
+  db_name = database.formatted_name(suffix)
+
+  ConsoleLogger.progress "creating database #{orig_db_name}#{' ' * (CONFIG.database_name_width - orig_db_name.size)}  => #{db_name}" do
+    system "#{mysqladmin} -f drop '#{db_name}' > /dev/null 2>&1"
+    system "#{mysqladmin} create '#{db_name}'"
+    !$?.success?
+  end
+end
+
+def import_test_dump(database, suffix)
+  db_name = database.formatted_name(suffix)
+  dump    = database.dump_path
+  custom  = database.dump_custom_path
+
+  ConsoleLogger.progress "importing database #{database.name}#{' ' * (CONFIG.database_name_width - database.name.size)} => #{db_name}" do
+    system "#{mysql} '#{db_name}' < '#{dump}'" if File.exist?(dump)
+    if File.exist?(custom)
+      system "#{mysql} '#{db_name}' < '#{custom}'"
+    end
+    !$?.success?
+  end
+
+  ConsoleLogger.progress "importing shards #{database.name}#{' ' * (CONFIG.database_name_width - database.name.size)}   => #{db_name}" do
+    success = true
+    database.post_import.each do |q|
+      sql = q['query'].dup
+      (q['variables'] || {}).each do |var, data|
+        replacement = CONFIG.send(data['format']).dup
+        (data['replacements'] || {}).each do |n, r|
+          replacement.gsub!("%#{n}%", r)
+        end
+        sql.gsub!("%#{var}%", replacement)
+      end
+
+      system "#{mysql} '#{db_name}' -e \"#{sql % suffix}\""
+      success &&= !$?.success?
+    end
+    success
+  end if database.post_import.any?
+end
+
+# Accepts a single parameter - database name suffix.
+def create_databases(suffix = nil)
+  if QUIET
+    print "* Creating database #{suffix || '1'} "
+  else
+    puts "Creating database #{suffix || '1'}..."
+  end
+  PROJECT.databases.each do |database|
+    create_database(database, suffix)
+  end
+
+  unless QUIET
+    puts "Importing dumps into the database #{suffix || '1'}..."
+  end
+  PROJECT.databases.each do |database|
+    import_test_dump(database, suffix)
+  end
+
+  if CONFIG.database_env == 'dev'
+    unless QUIET
+      puts "Importing table contents..."
+    end
+    system "#{mysql} < '#{CONFIG.dev_contents_file}'"
+  end
+
+  puts
+end
+
+#### Import databases
+
+# Initial database for specs
+QUIET = ARGV[0] == '-q' || ENV['QUIET'] == '1'
+PROJECT = PROJECTS.find { |p| p.name == (ENV['PROJECT'] || 'scribd') }
+if ENV['DOCKER'] == '1'
+  CONFIG.database_host = 'mysql' if ENV['DOCKER_MYSQL'] == '1'
+  CONFIG.mysql_options << " -h #{CONFIG.database_host}"
+end
+
+abort "Uknown project #{ENV['PROJECT'].inspect}" unless PROJECT
+
+ConsoleLogger.quiet! if QUIET
+ConsoleLogger.no_colors! if CONFIG.database_prefix
+
+suffixes = [nil, *2..ARGV.last.to_i]
+create_proc = proc { |suffix| create_databases(suffix) }
+suffixes.each(&create_proc)
+
+puts 'Done!'
